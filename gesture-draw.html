@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gesture Draw</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --accent: #00ffc8;
+    --accent2: #ff3366;
+    --accent3: #7b61ff;
+    --text: #e8e8f0;
+    --text-dim: #555568;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    font-style: italic;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .logo-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    margin-left: 10px;
+    opacity: 0.6;
+  }
+
+  .status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+
+  .status-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .main-area {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .canvas-container {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  video {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.12;
+    filter: grayscale(0.8) contrast(1.1);
+  }
+
+  .draw-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    transform: scaleX(-1);
+  }
+
+  .hand-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    transform: scaleX(-1);
+    pointer-events: none;
+  }
+
+  .cursor-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    transform: scaleX(-1);
+    pointer-events: none;
+  }
+
+  .start-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.92);
+    backdrop-filter: blur(20px);
+    transition: opacity 0.6s ease, visibility 0.6s;
+  }
+
+  .start-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .start-title {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: clamp(48px, 8vw, 96px);
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+
+  .start-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+  }
+
+  .start-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 16px 48px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+
+  .start-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 40px rgba(0, 255, 200, 0.15);
+  }
+
+  .start-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,255,200,0.05), rgba(123,97,255,0.05));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .start-btn:hover::before { opacity: 1; }
+
+  .side-panel {
+    width: 260px;
+    background: var(--surface);
+    border-left: 1px solid rgba(255,255,255,0.04);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    z-index: 5;
+    overflow-y: auto;
+  }
+
+  .panel-section h3 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+
+  .instructions {
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--text-dim);
+  }
+
+  .instructions em {
+    color: var(--accent);
+    font-style: normal;
+  }
+
+  .instructions .dim-em {
+    color: var(--accent3);
+    font-style: normal;
+  }
+
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .param-label {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .param-value {
+    font-size: 12px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .meter-bar {
+    width: 100%;
+    height: 3px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.08s ease-out;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+  }
+
+  .color-preview {
+    width: 100%;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+    margin-top: 8px;
+    transition: background 0.1s;
+  }
+
+  .selector-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sel-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sel-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,255,200,0.05);
+  }
+
+  .sel-btn:hover:not(.active) {
+    border-color: rgba(255,255,255,0.15);
+    color: var(--text);
+  }
+
+  .action-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 8px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .action-btn:hover {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  .action-btn.save:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .grain-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .loading .status-dot {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+<div class="grain-overlay"></div>
+
+<header>
+  <div style="display:flex;align-items:baseline">
+    <div class="logo">Gesture Draw</div>
+    <span class="logo-tag">Air Canvas</span>
+  </div>
+  <div class="status" id="statusBar">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">awaiting camera</span>
+  </div>
+</header>
+
+<div class="main-area">
+  <div class="canvas-container">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas class="draw-canvas" id="drawCanvas"></canvas>
+    <canvas class="hand-canvas" id="handCanvas"></canvas>
+    <canvas class="cursor-canvas" id="cursorCanvas"></canvas>
+
+    <div class="start-overlay" id="startOverlay">
+      <div class="start-title">Gesture Draw</div>
+      <div class="start-sub">Draw in the air with your hands</div>
+      <button class="start-btn" id="startBtn">Begin Session</button>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="panel-section">
+      <h3>How to Draw</h3>
+      <div class="instructions">
+        <em>Right hand</em> moves the brush<br><br>
+        <em>Pinch</em> right thumb + index to <span class="dim-em">draw</span><br><br>
+        <em>Left hand</em> &uarr;&darr; brush size &nbsp; <span class="dim-em">&larr;&rarr; hue</span><br><br>
+        <em>Pinch</em> left to pick <span class="dim-em">eraser</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Live Data</h3>
+      <div class="param-row">
+        <span class="param-label">Brush Size</span>
+        <span class="param-value" id="sizeValue">&mdash;</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="sizeMeter" style="width:50%"></div></div>
+
+      <div class="param-row" style="margin-top:14px">
+        <span class="param-label">Hue</span>
+        <span class="param-value" id="hueValue">&mdash;</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="hueMeter" style="width:0%"></div></div>
+
+      <div class="param-row" style="margin-top:14px">
+        <span class="param-label">Opacity</span>
+        <span class="param-value" id="opacityValue">&mdash;</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="opacityMeter" style="width:100%"></div></div>
+
+      <div class="color-preview" id="colorPreview" style="background: hsl(0, 80%, 60%)"></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Brush Mode</h3>
+      <div class="selector-grid" id="modeSelector">
+        <button class="sel-btn active" data-mode="round">Round</button>
+        <button class="sel-btn" data-mode="glow">Glow</button>
+        <button class="sel-btn" data-mode="spray">Spray</button>
+        <button class="sel-btn" data-mode="ribbon">Ribbon</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Background</h3>
+      <div class="selector-grid" id="bgSelector">
+        <button class="sel-btn active" data-bg="dark">Dark</button>
+        <button class="sel-btn" data-bg="light">Light</button>
+        <button class="sel-btn" data-bg="transparent">None</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Actions</h3>
+      <div class="selector-grid">
+        <button class="action-btn" id="clearBtn">Clear</button>
+        <button class="action-btn" id="undoBtn">Undo</button>
+        <button class="action-btn save" id="saveBtn">Save PNG</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"></script>
+
+<script>
+(function() {
+  const videoEl = document.getElementById('webcam');
+  const drawCanvas = document.getElementById('drawCanvas');
+  const handCanvas = document.getElementById('handCanvas');
+  const cursorCanvas = document.getElementById('cursorCanvas');
+  const drawCtx = drawCanvas.getContext('2d');
+  const handCtx = handCanvas.getContext('2d');
+  const cursorCtx = cursorCanvas.getContext('2d');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const statusBar = document.getElementById('statusBar');
+
+  const sizeValue = document.getElementById('sizeValue');
+  const sizeMeter = document.getElementById('sizeMeter');
+  const hueValue = document.getElementById('hueValue');
+  const hueMeter = document.getElementById('hueMeter');
+  const opacityValue = document.getElementById('opacityValue');
+  const opacityMeter = document.getElementById('opacityMeter');
+  const colorPreview = document.getElementById('colorPreview');
+
+  // === State ===
+  let brushMode = 'round';
+  let bgMode = 'dark';
+  let brushHue = 0;
+  let brushSize = 12;
+  let brushOpacity = 1;
+  let isErasing = false;
+  let isDrawing = false;
+  let lastPoint = null;
+
+  // Smoothing
+  const smooth = {
+    x: { value: 0, target: 0 },
+    y: { value: 0, target: 0 },
+    size: { value: 12, target: 12 },
+    hue: { value: 0, target: 0 },
+    opacity: { value: 1, target: 1 }
+  };
+  const SMOOTH = 0.25;
+  const CURSOR_SMOOTH = 0.4;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // === Undo stack: store canvas snapshots ===
+  const undoStack = [];
+  const MAX_UNDO = 20;
+
+  function saveSnapshot() {
+    undoStack.push(drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height));
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+  }
+
+  function undo() {
+    if (undoStack.length === 0) return;
+    const snapshot = undoStack.pop();
+    drawCtx.putImageData(snapshot, 0, 0);
+  }
+
+  // === Pinch detection ===
+  function getPinchDistance(landmarks) {
+    const thumb = landmarks[4];
+    const index = landmarks[8];
+    const dx = thumb.x - index.x;
+    const dy = thumb.y - index.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // === Drawing functions ===
+  function drawRound(ctx, x, y, size, color) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawGlow(ctx, x, y, size, hue, opacity) {
+    ctx.globalCompositeOperation = 'lighter';
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, size);
+    grad.addColorStop(0, `hsla(${hue}, 100%, 70%, ${opacity * 0.6})`);
+    grad.addColorStop(0.4, `hsla(${hue}, 90%, 50%, ${opacity * 0.3})`);
+    grad.addColorStop(1, `hsla(${hue}, 80%, 40%, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawSpray(ctx, x, y, size, color) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = color;
+    const density = Math.floor(size * 2);
+    for (let i = 0; i < density; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * size;
+      const px = x + Math.cos(angle) * radius;
+      const py = y + Math.sin(angle) * radius;
+      ctx.globalAlpha = Math.random() * 0.5 + 0.2;
+      ctx.fillRect(px, py, 1.5, 1.5);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawRibbon(ctx, x, y, prevX, prevY, size, color) {
+    if (prevX === null) return;
+    ctx.globalCompositeOperation = 'source-over';
+    const dx = x - prevX;
+    const dy = y - prevY;
+    const angle = Math.atan2(dy, dx) + Math.PI / 2;
+    const halfW = size / 2;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(prevX + Math.cos(angle) * halfW, prevY + Math.sin(angle) * halfW);
+    ctx.lineTo(prevX - Math.cos(angle) * halfW, prevY - Math.sin(angle) * halfW);
+    ctx.lineTo(x - Math.cos(angle) * halfW, y - Math.sin(angle) * halfW);
+    ctx.lineTo(x + Math.cos(angle) * halfW, y + Math.sin(angle) * halfW);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawStroke(x, y) {
+    const w = drawCanvas.width;
+    const h = drawCanvas.height;
+    const px = x * w;
+    const py = y * h;
+
+    const size = smooth.size.value;
+
+    if (isErasing) {
+      drawCtx.globalCompositeOperation = 'destination-out';
+      drawCtx.beginPath();
+      drawCtx.arc(px, py, size, 0, Math.PI * 2);
+      drawCtx.fill();
+      drawCtx.globalCompositeOperation = 'source-over';
+
+      if (lastPoint) {
+        // Erase along the line between last and current point
+        const lx = lastPoint.x * w;
+        const ly = lastPoint.y * h;
+        const dist = Math.sqrt((px - lx) ** 2 + (py - ly) ** 2);
+        const steps = Math.ceil(dist / (size * 0.3));
+        drawCtx.globalCompositeOperation = 'destination-out';
+        for (let i = 0; i < steps; i++) {
+          const t = i / steps;
+          const ix = lerp(lx, px, t);
+          const iy = lerp(ly, py, t);
+          drawCtx.beginPath();
+          drawCtx.arc(ix, iy, size, 0, Math.PI * 2);
+          drawCtx.fill();
+        }
+        drawCtx.globalCompositeOperation = 'source-over';
+      }
+
+      lastPoint = { x, y };
+      return;
+    }
+
+    const hue = smooth.hue.value;
+    const opacity = smooth.opacity.value;
+    const color = `hsla(${hue}, 80%, 60%, ${opacity})`;
+
+    // Interpolate between last and current point for smooth lines
+    if (lastPoint && (brushMode === 'round' || brushMode === 'spray' || brushMode === 'glow')) {
+      const lx = lastPoint.x * w;
+      const ly = lastPoint.y * h;
+      const dist = Math.sqrt((px - lx) ** 2 + (py - ly) ** 2);
+      const step = Math.max(1, size * 0.2);
+      const steps = Math.ceil(dist / step);
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / Math.max(steps, 1);
+        const ix = lerp(lx, px, t);
+        const iy = lerp(ly, py, t);
+        if (brushMode === 'round') drawRound(drawCtx, ix, iy, size, color);
+        else if (brushMode === 'glow') drawGlow(drawCtx, ix, iy, size * 1.5, hue, opacity);
+        else if (brushMode === 'spray') drawSpray(drawCtx, ix, iy, size, color);
+      }
+    } else if (brushMode === 'ribbon') {
+      const lx = lastPoint ? lastPoint.x * w : null;
+      const ly = lastPoint ? lastPoint.y * h : null;
+      drawRibbon(drawCtx, px, py, lx, ly, size, color);
+    } else {
+      if (brushMode === 'round') drawRound(drawCtx, px, py, size, color);
+      else if (brushMode === 'glow') drawGlow(drawCtx, px, py, size * 1.5, hue, opacity);
+      else if (brushMode === 'spray') drawSpray(drawCtx, px, py, size, color);
+    }
+
+    lastPoint = { x, y };
+  }
+
+  // === Draw hand skeleton ===
+  function drawHand(landmarks, label, w, h) {
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],
+      [5,9],[9,13],[13,17]
+    ];
+
+    const isRight = label === 'Right';
+    const color = isRight ? 'rgba(0,255,200,' : 'rgba(123,97,255,';
+
+    handCtx.lineWidth = 1.5;
+    for (const [a, b] of connections) {
+      const pa = landmarks[a];
+      const pb = landmarks[b];
+      handCtx.strokeStyle = color + '0.25)';
+      handCtx.beginPath();
+      handCtx.moveTo(pa.x * w, pa.y * h);
+      handCtx.lineTo(pb.x * w, pb.y * h);
+      handCtx.stroke();
+    }
+
+    for (let i = 0; i < landmarks.length; i++) {
+      const lm = landmarks[i];
+      const r = (i === 4 || i === 8) ? 4 : 2;
+      handCtx.fillStyle = color + '0.5)';
+      handCtx.beginPath();
+      handCtx.arc(lm.x * w, lm.y * h, r, 0, Math.PI * 2);
+      handCtx.fill();
+    }
+  }
+
+  // === Draw cursor ===
+  function drawCursor(w, h) {
+    cursorCtx.clearRect(0, 0, w, h);
+
+    const px = smooth.x.value * w;
+    const py = smooth.y.value * h;
+    const size = smooth.size.value;
+    const hue = smooth.hue.value;
+
+    if (isErasing) {
+      // Eraser cursor
+      cursorCtx.strokeStyle = 'rgba(255,255,255,0.6)';
+      cursorCtx.lineWidth = 1.5;
+      cursorCtx.setLineDash([4, 4]);
+      cursorCtx.beginPath();
+      cursorCtx.arc(px, py, size, 0, Math.PI * 2);
+      cursorCtx.stroke();
+      cursorCtx.setLineDash([]);
+    } else if (isDrawing) {
+      // Active drawing ring
+      cursorCtx.strokeStyle = `hsla(${hue}, 80%, 60%, 0.8)`;
+      cursorCtx.lineWidth = 2;
+      cursorCtx.beginPath();
+      cursorCtx.arc(px, py, size / 2 + 4, 0, Math.PI * 2);
+      cursorCtx.stroke();
+
+      // Inner glow
+      const grad = cursorCtx.createRadialGradient(px, py, 0, px, py, size / 2 + 8);
+      grad.addColorStop(0, `hsla(${hue}, 80%, 60%, 0.15)`);
+      grad.addColorStop(1, `hsla(${hue}, 80%, 60%, 0)`);
+      cursorCtx.fillStyle = grad;
+      cursorCtx.beginPath();
+      cursorCtx.arc(px, py, size / 2 + 8, 0, Math.PI * 2);
+      cursorCtx.fill();
+    } else {
+      // Idle crosshair
+      cursorCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+      cursorCtx.lineWidth = 1;
+      cursorCtx.beginPath();
+      cursorCtx.arc(px, py, size / 2 + 2, 0, Math.PI * 2);
+      cursorCtx.stroke();
+
+      const crossSize = size / 2 + 8;
+      cursorCtx.beginPath();
+      cursorCtx.moveTo(px - crossSize, py);
+      cursorCtx.lineTo(px - crossSize + 5, py);
+      cursorCtx.moveTo(px + crossSize, py);
+      cursorCtx.lineTo(px + crossSize - 5, py);
+      cursorCtx.moveTo(px, py - crossSize);
+      cursorCtx.lineTo(px, py - crossSize + 5);
+      cursorCtx.moveTo(px, py + crossSize);
+      cursorCtx.lineTo(px, py + crossSize - 5);
+      cursorCtx.stroke();
+    }
+  }
+
+  // === MediaPipe Results ===
+  let wasDrawing = false;
+
+  function onResults(results) {
+    const w = handCanvas.width;
+    const h = handCanvas.height;
+    handCtx.clearRect(0, 0, w, h);
+
+    let rightHand = null;
+    let leftHand = null;
+
+    if (results.multiHandLandmarks && results.multiHandedness) {
+      for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+        const landmarks = results.multiHandLandmarks[i];
+        const label = results.multiHandedness[i].label;
+        // MediaPipe mirrors labels
+        if (label === 'Left') {
+          rightHand = landmarks;
+          drawHand(landmarks, 'Right', w, h);
+        } else {
+          leftHand = landmarks;
+          drawHand(landmarks, 'Left', w, h);
+        }
+      }
+    }
+
+    // === Right hand: brush position, pinch = draw ===
+    if (rightHand) {
+      const indexTip = rightHand[8];
+      const pinchDist = getPinchDistance(rightHand);
+      const isPinched = pinchDist < 0.06;
+
+      smooth.x.target = indexTip.x;
+      smooth.y.target = indexTip.y;
+
+      const wasDrawingBefore = isDrawing;
+      isDrawing = isPinched;
+
+      // Save undo snapshot when starting a new stroke
+      if (isDrawing && !wasDrawingBefore) {
+        saveSnapshot();
+      }
+      // Reset last point when starting or stopping
+      if (isDrawing !== wasDrawingBefore) {
+        lastPoint = null;
+      }
+    } else {
+      isDrawing = false;
+      lastPoint = null;
+    }
+
+    // === Left hand: Y = size, X = hue, pinch = eraser ===
+    if (leftHand) {
+      const indexTip = leftHand[8];
+      const pinchDist = getPinchDistance(leftHand);
+      const leftPinched = pinchDist < 0.06;
+
+      // Y → brush size (3 to 60)
+      const sizeNorm = 1 - Math.max(0, Math.min(1, indexTip.y));
+      smooth.size.target = 3 + sizeNorm * 57;
+
+      // X → hue (0 to 360)
+      const hueNorm = Math.max(0, Math.min(1, indexTip.x));
+      smooth.hue.target = hueNorm * 360;
+
+      isErasing = leftPinched;
+    } else {
+      isErasing = false;
+    }
+  }
+
+  // === Render loop ===
+  function renderLoop() {
+    // Smooth values
+    smooth.x.value = lerp(smooth.x.value, smooth.x.target, CURSOR_SMOOTH);
+    smooth.y.value = lerp(smooth.y.value, smooth.y.target, CURSOR_SMOOTH);
+    smooth.size.value = lerp(smooth.size.value, smooth.size.target, SMOOTH);
+    smooth.hue.value = lerp(smooth.hue.value, smooth.hue.target, SMOOTH);
+    smooth.opacity.value = lerp(smooth.opacity.value, smooth.opacity.target, SMOOTH);
+
+    const w = cursorCanvas.width;
+    const h = cursorCanvas.height;
+
+    // Draw if pinching
+    if (isDrawing || isErasing) {
+      drawStroke(smooth.x.value, smooth.y.value);
+    } else {
+      lastPoint = null;
+    }
+
+    drawCursor(w, h);
+
+    // Update UI
+    const size = Math.round(smooth.size.value);
+    sizeValue.textContent = size + 'px';
+    sizeMeter.style.width = ((size - 3) / 57 * 100) + '%';
+
+    const hue = Math.round(smooth.hue.value);
+    hueValue.textContent = hue + '°';
+    hueMeter.style.width = (hue / 360 * 100) + '%';
+    hueMeter.style.background = `linear-gradient(90deg, hsl(${hue}, 80%, 50%), hsl(${(hue + 60) % 360}, 80%, 50%))`;
+
+    opacityValue.textContent = Math.round(smooth.opacity.value * 100) + '%';
+    opacityMeter.style.width = (smooth.opacity.value * 100) + '%';
+
+    if (isErasing) {
+      colorPreview.style.background = 'repeating-conic-gradient(#333 0% 25%, #555 0% 50%) 50%/16px 16px';
+    } else {
+      colorPreview.style.background = `hsl(${hue}, 80%, 60%)`;
+    }
+
+    requestAnimationFrame(renderLoop);
+  }
+
+  // === Background fill ===
+  function fillBackground() {
+    if (bgMode === 'dark') {
+      drawCtx.fillStyle = '#0a0a0f';
+      drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+    } else if (bgMode === 'light') {
+      drawCtx.fillStyle = '#f0f0f0';
+      drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+    } else {
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    }
+  }
+
+  // === Resize ===
+  function resize() {
+    const container = document.querySelector('.canvas-container');
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    // Only resize overlay canvases freely; preserve draw canvas content
+    handCanvas.width = w;
+    handCanvas.height = h;
+    cursorCanvas.width = w;
+    cursorCanvas.height = h;
+
+    if (drawCanvas.width !== w || drawCanvas.height !== h) {
+      // Save existing drawing
+      const imageData = drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+      drawCanvas.width = w;
+      drawCanvas.height = h;
+      fillBackground();
+      drawCtx.putImageData(imageData, 0, 0);
+    }
+  }
+
+  window.addEventListener('resize', resize);
+
+  // === Button handlers ===
+  document.getElementById('modeSelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.mode) return;
+    document.querySelectorAll('#modeSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    brushMode = btn.dataset.mode;
+  });
+
+  document.getElementById('bgSelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.bg) return;
+    document.querySelectorAll('#bgSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    bgMode = btn.dataset.bg;
+    saveSnapshot();
+    fillBackground();
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    saveSnapshot();
+    fillBackground();
+  });
+
+  document.getElementById('undoBtn').addEventListener('click', () => {
+    undo();
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'gesture-drawing.png';
+    link.href = drawCanvas.toDataURL('image/png');
+    link.click();
+  });
+
+  // === Keyboard shortcuts ===
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      undo();
+    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+      saveSnapshot();
+      fillBackground();
+    }
+  });
+
+  // === Start ===
+  startBtn.addEventListener('click', async () => {
+    startOverlay.classList.add('hidden');
+    statusBar.classList.add('loading');
+    statusText.textContent = 'initializing...';
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.6
+    });
+
+    hands.onResults(onResults);
+
+    resize();
+    fillBackground();
+
+    try {
+      const camera = new Camera(videoEl, {
+        onFrame: async () => {
+          await hands.send({ image: videoEl });
+        },
+        width: 1280,
+        height: 720
+      });
+
+      await camera.start();
+
+      statusDot.classList.add('active');
+      statusBar.classList.remove('loading');
+      statusText.textContent = 'tracking';
+
+      renderLoop();
+    } catch(err) {
+      statusText.textContent = 'camera error';
+      console.error(err);
+    }
+  });
+})();
+</script>
+</body>
+</html>

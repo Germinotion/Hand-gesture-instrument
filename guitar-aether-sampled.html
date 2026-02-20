@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guitar Aether — Sampled</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --accent: #00ffc8;
+    --accent2: #ff3366;
+    --accent3: #7b61ff;
+    --text: #e8e8f0;
+    --text-dim: #555568;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    font-style: italic;
+    background: linear-gradient(135deg, var(--accent2), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .logo-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--accent2);
+    margin-left: 10px;
+    opacity: 0.6;
+  }
+
+  .status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-dim); transition: background 0.3s;
+  }
+
+  .status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  .main-area { flex: 1; display: flex; position: relative; overflow: hidden; }
+
+  .video-container {
+    position: relative; flex: 1; display: flex;
+    align-items: center; justify-content: center;
+  }
+
+  video, .overlay-canvas {
+    position: absolute; width: 100%; height: 100%; object-fit: cover;
+  }
+
+  video { transform: scaleX(-1); opacity: 0.25; filter: grayscale(0.6) contrast(1.1); }
+  .overlay-canvas { transform: scaleX(-1); z-index: 2; }
+
+  .viz-canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1; pointer-events: none;
+  }
+
+  .strum-flash {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255,51,102,0.25), transparent 70%);
+    opacity: 0; transition: opacity 0.06s ease-out;
+  }
+
+  .start-overlay {
+    position: absolute; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10,10,15,0.92); backdrop-filter: blur(20px);
+    transition: opacity 0.6s ease, visibility 0.6s;
+  }
+
+  .start-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+  .start-title {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: clamp(48px, 8vw, 96px);
+    background: linear-gradient(135deg, var(--accent2), var(--accent3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+
+  .start-sub {
+    font-size: 13px; color: var(--text-dim);
+    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 48px;
+  }
+
+  .start-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 13px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 16px 48px; cursor: pointer; transition: all 0.3s;
+  }
+
+  .start-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Song bar */
+  .song-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    background: rgba(10,10,15,0.85); backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 10px 20px; display: none;
+  }
+
+  .song-bar.visible { display: block; }
+
+  .song-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .song-title {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 18px; color: var(--accent2);
+  }
+
+  .song-controls { display: flex; gap: 8px; align-items: center; }
+
+  .song-controls button {
+    background: none; border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-dim); font-family: 'DM Mono', monospace;
+    font-size: 11px; padding: 4px 12px; cursor: pointer; transition: all 0.2s;
+  }
+
+  .song-controls button:hover { border-color: var(--accent); color: var(--accent); }
+  .song-controls button.active { border-color: var(--accent2); color: var(--accent2); }
+
+  .song-bpm {
+    font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em;
+  }
+
+  .song-progression {
+    display: flex; gap: 2px; overflow: hidden; height: 28px;
+  }
+
+  .song-chord-block {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--text-dim);
+    background: rgba(255,255,255,0.03); border-radius: 3px;
+    min-width: 20px; padding: 0 6px; position: relative; overflow: hidden;
+    transition: background 0.15s;
+  }
+
+  .song-chord-block.current {
+    color: var(--text); background: rgba(255,51,102,0.15);
+    border: 1px solid rgba(255,51,102,0.3);
+  }
+
+  .song-chord-block.past {
+    opacity: 0.3;
+  }
+
+  .song-chord-block .beat-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: rgba(255,51,102,0.15);
+  }
+
+  /* Side panel */
+  .side-panel {
+    width: 280px; background: var(--surface);
+    border-left: 1px solid rgba(255,255,255,0.04);
+    padding: 24px; display: flex; flex-direction: column; gap: 18px;
+    z-index: 5; overflow-y: auto;
+  }
+
+  .panel-section h3 {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.2em; color: var(--text-dim); margin-bottom: 10px;
+  }
+
+  .param-row {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+  }
+
+  .param-label { font-size: 12px; color: var(--text-dim); }
+
+  .param-value {
+    font-size: 12px; color: var(--accent);
+    font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;
+  }
+
+  .meter-bar {
+    width: 100%; height: 3px; background: rgba(255,255,255,0.04);
+    border-radius: 2px; margin-top: 3px; overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%; border-radius: 2px; transition: width 0.1s ease-out;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+  }
+
+  .meter-fill.whammy { background: linear-gradient(90deg, var(--accent2), #ff6600); }
+
+  .selector-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .sel-btn {
+    font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px;
+    border: 1px solid rgba(255,255,255,0.06); background: none;
+    color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+  }
+
+  .sel-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,255,200,0.05); }
+  .sel-btn:hover:not(.active) { border-color: rgba(255,255,255,0.15); color: var(--text); }
+  .sel-btn.inst.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,51,102,0.05); }
+  .sel-btn.song-btn.active { border-color: var(--accent3); color: var(--accent3); background: rgba(123,97,255,0.08); }
+
+  .instructions { font-size: 11px; line-height: 1.7; color: var(--text-dim); }
+  .instructions em { color: var(--accent); font-style: normal; }
+  .instructions .dim-em { color: var(--accent3); font-style: normal; }
+
+  .chord-display {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 10; text-align: center; pointer-events: none;
+  }
+
+  .current-chord {
+    font-family: 'Instrument Serif', serif; font-style: italic; font-size: 72px;
+    color: var(--accent); text-shadow: 0 0 40px rgba(0,255,200,0.3);
+    opacity: 0; transition: opacity 0.15s;
+  }
+
+  .current-chord.visible { opacity: 1; }
+  .current-chord.playing { color: var(--accent2); text-shadow: 0 0 40px rgba(255,51,102,0.3); }
+
+  .chord-sub {
+    font-size: 11px; color: var(--text-dim);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px;
+  }
+
+  .chord-map-cols { display: flex; gap: 12px; }
+  .chord-map-col { flex: 1; }
+
+  .chord-map-col-header {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--text-dim); opacity: 0.6; margin-bottom: 4px;
+  }
+
+  .chord-map-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2px 0; font-size: 11px;
+  }
+
+  .chord-map-fingers { color: var(--text-dim); }
+  .chord-map-name { color: var(--accent); }
+  .chord-map-name.mute { color: var(--accent2); }
+
+  .chord-map-row.active-chord {
+    background: rgba(0,255,200,0.05); margin: 0 -4px; padding: 2px 4px; border-radius: 3px;
+  }
+
+  .chord-map-row.active-chord .chord-map-name { color: var(--accent2); }
+
+  .chord-map-row.song-target {
+    background: rgba(123,97,255,0.1); margin: 0 -4px; padding: 2px 4px; border-radius: 3px;
+  }
+
+  .chord-map-row.song-target .chord-map-fingers { color: var(--accent3); }
+
+  .grain-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+  .loading .status-dot { animation: pulse 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="grain-overlay"></div>
+
+<header>
+  <div style="display:flex;align-items:baseline">
+    <div class="logo">Guitar Aether</div>
+    <span class="logo-tag">Sampled</span>
+  </div>
+  <div class="status" id="statusBar">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">awaiting camera</span>
+  </div>
+</header>
+
+<div class="main-area">
+  <div class="video-container">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas class="viz-canvas" id="vizCanvas"></canvas>
+    <canvas class="overlay-canvas" id="overlayCanvas"></canvas>
+    <div class="strum-flash" id="strumFlash"></div>
+
+    <div class="song-bar" id="songBar">
+      <div class="song-header">
+        <span class="song-title" id="songTitle"></span>
+        <div class="song-controls">
+          <span class="song-bpm" id="songBpm"></span>
+          <button id="songPlayPause">Play</button>
+          <button id="songStop">Stop</button>
+        </div>
+      </div>
+      <div class="song-progression" id="songProgression"></div>
+    </div>
+
+    <div class="start-overlay" id="startOverlay">
+      <div class="start-title">Guitar Aether</div>
+      <div class="start-sub">Air Guitar with Hand Tracking</div>
+      <button class="start-btn" id="startBtn">Begin Session</button>
+    </div>
+
+    <div class="chord-display">
+      <div class="current-chord" id="chordDisplay">&mdash;</div>
+      <div class="chord-sub" id="chordSub"></div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="panel-section">
+      <h3>How to Play</h3>
+      <div class="instructions">
+        <em>Left hand</em> fingers select chord<br>
+        <span class="dim-em">Thumb out</span> = bank 1 &nbsp; <span class="dim-em">Thumb in</span> = bank 2<br><br>
+        <em>Right hand</em> swipe to strum<br>
+        <span class="dim-em">Pinch + pull down</span> = whammy bar<br><br>
+        <span class="dim-em">Fist</span> (left) mute &nbsp; <span class="dim-em">Fist</span> (right) palm mute
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Chord Map</h3>
+      <div id="chordMap"></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Live</h3>
+      <div class="param-row">
+        <span class="param-label">Armed</span>
+        <span class="param-value" id="armedValue">&mdash;</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Playing</span>
+        <span class="param-value" id="playingValue">&mdash;</span>
+      </div>
+      <div class="param-row" style="margin-top:8px">
+        <span class="param-label">Strum</span>
+        <span class="param-value" id="strumValue">&mdash;</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="strumMeter" style="width:0%"></div></div>
+      <div class="param-row" style="margin-top:8px">
+        <span class="param-label">Whammy</span>
+        <span class="param-value" id="whammyValue">&mdash;</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill whammy" id="whammyMeter" style="width:0%"></div></div>
+      <div class="param-row" style="margin-top:8px">
+        <span class="param-label">L Fingers</span>
+        <span class="param-value" id="fingerValue">&mdash;</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">R Fingers</span>
+        <span class="param-value" id="rFingerValue">&mdash;</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Instrument</h3>
+      <div class="selector-grid" id="instrumentSelector">
+        <button class="sel-btn inst active" data-inst="guitar">Guitar</button>
+        <button class="sel-btn inst" data-inst="bass">Bass</button>
+      </div>
+    </div>
+
+    <div class="panel-section" id="keySection">
+      <h3>Key</h3>
+      <div class="selector-grid" id="keySelector">
+        <button class="sel-btn active" data-key="E">E</button>
+        <button class="sel-btn" data-key="A">A</button>
+        <button class="sel-btn" data-key="D">D</button>
+        <button class="sel-btn" data-key="G">G</button>
+        <button class="sel-btn" data-key="C">C</button>
+        <button class="sel-btn" data-key="Am">Am</button>
+        <button class="sel-btn" data-key="Em">Em</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Voicing</h3>
+      <div class="selector-grid" id="voicingSelector">
+        <button class="sel-btn active" data-voicing="full">Full Chords</button>
+        <button class="sel-btn" data-voicing="power">Power Chords</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Drive</h3>
+      <div class="selector-grid" id="driveSelector">
+        <button class="sel-btn inst active" data-drive="clean">Clean</button>
+        <button class="sel-btn inst" data-drive="crunch">Crunch</button>
+        <button class="sel-btn inst" data-drive="drive">Drive</button>
+        <button class="sel-btn inst" data-drive="heavy">Heavy</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Songs</h3>
+      <div class="selector-grid" id="songSelector">
+        <button class="sel-btn song-btn" data-song="silence">Sound of Silence</button>
+        <button class="sel-btn song-btn" data-song="heaven">Knockin' on Heaven's Door</button>
+        <button class="sel-btn song-btn" data-song="letitbe">Let It Be</button>
+        <button class="sel-btn song-btn" data-song="wish">Wish You Were Here</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"></script>
+<!-- Tone.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+<script>
+(function() {
+  // === DOM ===
+  const videoEl = document.getElementById('webcam');
+  const overlayCanvas = document.getElementById('overlayCanvas');
+  const vizCanvas = document.getElementById('vizCanvas');
+  const overlayCtx = overlayCanvas.getContext('2d');
+  const vizCtx = vizCanvas.getContext('2d');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const statusBar = document.getElementById('statusBar');
+  const chordDisplay = document.getElementById('chordDisplay');
+  const chordSub = document.getElementById('chordSub');
+  const armedValue = document.getElementById('armedValue');
+  const playingValue = document.getElementById('playingValue');
+  const strumValueEl = document.getElementById('strumValue');
+  const strumMeter = document.getElementById('strumMeter');
+  const whammyValueEl = document.getElementById('whammyValue');
+  const whammyMeter = document.getElementById('whammyMeter');
+  const fingerValue = document.getElementById('fingerValue');
+  const rFingerValue = document.getElementById('rFingerValue');
+  const chordMapEl = document.getElementById('chordMap');
+  const strumFlash = document.getElementById('strumFlash');
+  const songBar = document.getElementById('songBar');
+  const songTitle = document.getElementById('songTitle');
+  const songBpmEl = document.getElementById('songBpm');
+  const songProgression = document.getElementById('songProgression');
+  const songPlayPause = document.getElementById('songPlayPause');
+  const songStopBtn = document.getElementById('songStop');
+
+  // === Chord Voicings ===
+  const CHORD_VOICINGS = {
+    'C':   ['C3','E3','G3','C4','E4'],
+    'D':   ['D3','A3','D4','F#4'],
+    'E':   ['E2','B2','E3','G#3','B3','E4'],
+    'F':   ['F2','C3','F3','A3','C4','F4'],
+    'G':   ['G2','B2','D3','G3','B3','G4'],
+    'A':   ['A2','E3','A3','C#4','E4'],
+    'B':   ['B2','F#3','B3','D#4','F#4'],
+    'Bb':  ['Bb2','F3','Bb3','D4','F4'],
+    'Am':  ['A2','E3','A3','C4','E4'],
+    'Bm':  ['B2','F#3','B3','D4','F#4'],
+    'C#m': ['C#3','G#3','C#4','E4','G#4'],
+    'Dm':  ['D3','A3','D4','F4'],
+    'Em':  ['E2','B2','E3','G3','B3','E4'],
+    'F#m': ['F#2','C#3','F#3','A3','C#4','F#4'],
+    'G#m': ['G#2','D#3','G#3','B3','D#4','G#4'],
+    'Gm':  ['G2','Bb2','D3','G3','Bb3'],
+    'E7':  ['E2','B2','D3','G#3','B3','E4'],
+    'A7':  ['A2','E3','G3','C#4','E4'],
+    'D7':  ['D3','A3','C4','F#4'],
+    'G7':  ['G2','B2','D3','G3','B3','F4'],
+    'C7':  ['C3','E3','Bb3','C4','E4'],
+    'B7':  ['B2','D#3','A3','B3','F#4'],
+  };
+
+  const POWER_VOICINGS = {};
+  // Generate power voicings from full voicings (root + 5th + octave)
+  const POWER_NOTES = {
+    'C':['C3','G3','C4'],'D':['D3','A3','D4'],'E':['E2','B2','E3'],
+    'F':['F2','C3','F3'],'G':['G2','D3','G3'],'A':['A2','E3','A3'],
+    'B':['B2','F#3','B3'],'Bb':['Bb2','F3','Bb3'],
+    'Am':['A2','E3','A3'],'Bm':['B2','F#3','B3'],'C#m':['C#3','G#3','C#4'],
+    'Dm':['D3','A3','D4'],'Em':['E2','B2','E3'],'F#m':['F#2','C#3','F#3'],
+    'G#m':['G#2','D#3','G#3'],'Gm':['G2','D3','G3'],
+    'E7':['E2','B2','E3'],'A7':['A2','E3','A3'],'D7':['D3','A3','D4'],
+    'G7':['G2','D3','G3'],'C7':['C3','G3','C4'],'B7':['B2','F#3','B3'],
+  };
+  Object.assign(POWER_VOICINGS, POWER_NOTES);
+
+  // === Bass Voicings ===
+  const BASS_ROOT = {
+    'C':['C2'],'D':['D2'],'E':['E1'],'F':['F1'],'G':['G1'],
+    'A':['A1'],'B':['B1'],'Bb':['Bb1'],
+    'Am':['A1'],'Bm':['B1'],'C#m':['C#2'],'Dm':['D2'],
+    'Em':['E1'],'F#m':['F#1'],'G#m':['G#1'],'Gm':['G1'],
+    'E7':['E1'],'A7':['A1'],'D7':['D2'],'G7':['G1'],'C7':['C2'],'B7':['B1'],
+  };
+
+  const BASS_FIFTH = {
+    'C':['C2','G2'],'D':['D2','A2'],'E':['E1','B1'],'F':['F1','C2'],'G':['G1','D2'],
+    'A':['A1','E2'],'B':['B1','F#2'],'Bb':['Bb1','F2'],
+    'Am':['A1','E2'],'Bm':['B1','F#2'],'C#m':['C#2','G#2'],'Dm':['D2','A2'],
+    'Em':['E1','B1'],'F#m':['F#1','C#2'],'G#m':['G#1','D#2'],'Gm':['G1','D2'],
+    'E7':['E1','B1'],'A7':['A1','E2'],'D7':['D2','A2'],'G7':['G1','D2'],'C7':['C2','G2'],'B7':['B1','F#2'],
+  };
+
+  const BASS_OCTAVE = {
+    'C':['C2','C3'],'D':['D2','D3'],'E':['E1','E2'],'F':['F1','F2'],'G':['G1','G2'],
+    'A':['A1','A2'],'B':['B1','B2'],'Bb':['Bb1','Bb2'],
+    'Am':['A1','A2'],'Bm':['B1','B2'],'C#m':['C#2','C#3'],'Dm':['D2','D3'],
+    'Em':['E1','E2'],'F#m':['F#1','F#2'],'G#m':['G#1','G#2'],'Gm':['G1','G2'],
+    'E7':['E1','E2'],'A7':['A1','A2'],'D7':['D2','D3'],'G7':['G1','G2'],'C7':['C2','C3'],'B7':['B1','B2'],
+  };
+
+  // Key chords: thumbOut (1-4 fingers) + thumbIn (1-4 fingers)
+  const KEY_CHORDS = {
+    'E':  { name:'E Major',  thumbOut:['E','A','B','C#m'],  thumbIn:['F#m','G#m','D','E7'] },
+    'A':  { name:'A Major',  thumbOut:['A','D','E','F#m'],  thumbIn:['Bm','C#m','G','A7'] },
+    'D':  { name:'D Major',  thumbOut:['D','G','A','Bm'],   thumbIn:['Em','F#m','C','D7'] },
+    'G':  { name:'G Major',  thumbOut:['G','C','D','Em'],   thumbIn:['Am','Bm','F','G7'] },
+    'C':  { name:'C Major',  thumbOut:['C','F','G','Am'],   thumbIn:['Dm','Em','Bb','C7'] },
+    'Am': { name:'A Minor',  thumbOut:['Am','Dm','Em','C'], thumbIn:['G','F','E','A7'] },
+    'Em': { name:'E Minor',  thumbOut:['Em','Am','Bm','G'], thumbIn:['D','C','A','E7'] },
+  };
+
+  const DRIVE_PRESETS = {
+    clean:  { distortion: 0,    wet: 0 },
+    crunch: { distortion: 0.3,  wet: 0.4 },
+    drive:  { distortion: 0.6,  wet: 0.6 },
+    heavy:  { distortion: 0.85, wet: 0.8 },
+  };
+
+  // === Songs ===
+  const SONGS = {
+    silence: {
+      title: 'Sound of Silence',
+      artist: 'Simon & Garfunkel',
+      bpm: 104,
+      chords: ['Am','G','F','C'],
+      progression: [
+        {c:'Am',b:8},{c:'G',b:8},{c:'Am',b:8},{c:'G',b:8},
+        {c:'Am',b:8},{c:'F',b:4},{c:'C',b:4},
+        {c:'C',b:4},{c:'F',b:4},{c:'C',b:4},{c:'Am',b:4},
+        {c:'Am',b:4},{c:'F',b:4},{c:'C',b:4},{c:'G',b:4},{c:'Am',b:8},
+      ]
+    },
+    heaven: {
+      title: "Knockin' on Heaven's Door",
+      artist: 'Bob Dylan',
+      bpm: 70,
+      chords: ['G','D','Am','C'],
+      progression: [
+        {c:'G',b:4},{c:'D',b:4},{c:'Am',b:8},
+        {c:'G',b:4},{c:'D',b:4},{c:'C',b:8},
+        {c:'G',b:4},{c:'D',b:4},{c:'Am',b:8},
+        {c:'G',b:4},{c:'D',b:4},{c:'C',b:8},
+      ]
+    },
+    letitbe: {
+      title: 'Let It Be',
+      artist: 'The Beatles',
+      bpm: 72,
+      chords: ['C','G','Am','F'],
+      progression: [
+        {c:'C',b:4},{c:'G',b:4},{c:'Am',b:4},{c:'F',b:4},
+        {c:'C',b:4},{c:'G',b:4},{c:'F',b:4},{c:'C',b:4},
+        {c:'C',b:4},{c:'G',b:4},{c:'Am',b:4},{c:'F',b:4},
+        {c:'C',b:4},{c:'G',b:4},{c:'F',b:4},{c:'C',b:4},
+      ]
+    },
+    wish: {
+      title: 'Wish You Were Here',
+      artist: 'Pink Floyd',
+      bpm: 62,
+      chords: ['Em','G','A','C','D'],
+      progression: [
+        {c:'Em',b:8},{c:'G',b:8},{c:'Em',b:8},{c:'G',b:8},
+        {c:'Em',b:8},{c:'A',b:8},{c:'Em',b:8},{c:'A',b:8},
+        {c:'G',b:8},{c:'C',b:4},{c:'D',b:4},
+        {c:'Am',b:4},{c:'G',b:12},
+      ]
+    },
+  };
+
+  // === State ===
+  let currentKey = 'E';
+  let currentDrive = 'clean';
+  let voicingMode = 'full';
+  let currentInstrument = 'guitar'; // 'guitar' or 'bass'
+  let armedChord = null;
+  let playingChord = null;
+  let activeNotes = [];
+  let isPlaying = false;
+  let instrumentLoaded = false;
+
+  // Strum
+  let prevRightWristX = null;
+  let rightHandFrames = 0;
+  let lastStrumTime = 0;
+  const STRUM_COOLDOWN = 180;
+  const STRUM_THRESHOLD = 0.025;
+
+  // Whammy
+  let whammyActive = false;
+  let whammyStartY = 0;
+  let whammyTarget = 0;
+  let whammySmooth = 0;
+
+  // Song mode
+  let songMode = false;
+  let currentSong = null;
+  let songBeat = 0;
+  let songPlaying = false;
+  let songScheduleId = null;
+  let songChordMap = null; // finger → chord for current song
+
+  // Visual
+  let strumFlashTimer = null;
+  let strumMeterTimer = null;
+  let particles = [];
+  const MAX_PARTICLES = 60;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // === Audio Nodes ===
+  let instrument = null;
+  let pitchShift, distortionNode, gainNode, filter, delay, reverb, metronome;
+
+  function initAudio() {
+    reverb = new Tone.Reverb({ decay: 3, wet: 0.15 }).toDestination();
+    delay = new Tone.FeedbackDelay({ delayTime: 0.2, feedback: 0.12, wet: 0.12 }).connect(reverb);
+    filter = new Tone.Filter({ frequency: 3500, type: 'lowpass', rolloff: -12, Q: 2 }).connect(delay);
+    gainNode = new Tone.Gain(0.6).connect(filter);
+    distortionNode = new Tone.Distortion({ distortion: 0, wet: 0, oversample: '2x' }).connect(gainNode);
+    pitchShift = new Tone.PitchShift({ pitch: 0, windowSize: 0.05, wet: 1 }).connect(distortionNode);
+
+    // Metronome click
+    metronome = new Tone.Synth({
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.001, decay: 0.06, sustain: 0, release: 0.01 }
+    }).toDestination();
+    metronome.volume.value = -12;
+  }
+
+  async function loadGuitar() {
+    instrumentLoaded = false;
+    statusText.textContent = 'loading guitar...';
+    statusBar.classList.add('loading');
+
+    try {
+      instrument = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Load timeout')), 20000);
+        const s = new Tone.Sampler({
+          urls: {
+            'E2':'E2.mp3','G2':'G2.mp3','Bb2':'Bb2.mp3',
+            'C3':'C3.mp3','Eb3':'Eb3.mp3','Gb3':'Gb3.mp3','A3':'A3.mp3',
+            'C4':'C4.mp3','Eb4':'Eb4.mp3','Gb4':'Gb4.mp3','A4':'A4.mp3',
+            'C5':'C5.mp3'
+          },
+          baseUrl: 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/electric_guitar_clean-mp3/',
+          release: 0.8,
+          onload: () => { clearTimeout(timeout); resolve(s); }
+        }).connect(pitchShift);
+      });
+
+      instrumentLoaded = true;
+      statusText.textContent = 'tracking';
+      statusBar.classList.remove('loading');
+    } catch(err) {
+      console.error('Failed to load guitar:', err);
+      statusText.textContent = 'load failed';
+      statusBar.classList.remove('loading');
+    }
+  }
+
+  async function loadBass() {
+    instrumentLoaded = false;
+    statusText.textContent = 'loading bass...';
+    statusBar.classList.add('loading');
+
+    try {
+      instrument = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Load timeout')), 20000);
+        const s = new Tone.Sampler({
+          urls: {
+            'E1':'E1.mp3','A1':'A1.mp3',
+            'C2':'C2.mp3','E2':'E2.mp3','A2':'A2.mp3',
+            'C3':'C3.mp3','E3':'E3.mp3'
+          },
+          baseUrl: 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/electric_bass_finger-mp3/',
+          release: 1.2,
+          onload: () => { clearTimeout(timeout); resolve(s); }
+        }).connect(pitchShift);
+      });
+
+      instrumentLoaded = true;
+      statusText.textContent = 'tracking';
+      statusBar.classList.remove('loading');
+    } catch(err) {
+      console.error('Failed to load bass:', err);
+      statusText.textContent = 'load failed';
+      statusBar.classList.remove('loading');
+    }
+  }
+
+  async function switchInstrument(inst) {
+    if (inst === currentInstrument) return;
+    muteAll();
+    armedChord = null;
+    currentInstrument = inst;
+
+    if (instrument) {
+      instrument.disconnect();
+      instrument.dispose();
+      instrument = null;
+    }
+
+    instrumentLoaded = false;
+
+    if (pitchShift) {
+      if (inst === 'bass') {
+        await loadBass();
+        if (filter) filter.frequency.value = 1800;
+        if (gainNode) gainNode.gain.value = 9.0;
+      } else {
+        await loadGuitar();
+        if (filter) filter.frequency.value = 3500;
+        if (gainNode) gainNode.gain.value = 0.6;
+      }
+    }
+
+    updateVoicingSelector();
+    updateChordMap();
+  }
+
+  function updateVoicingSelector() {
+    const container = document.getElementById('voicingSelector');
+    if (currentInstrument === 'bass') {
+      voicingMode = 'root';
+      container.innerHTML =
+        '<button class="sel-btn active" data-voicing="root">Root</button>' +
+        '<button class="sel-btn" data-voicing="fifth">Root + 5th</button>' +
+        '<button class="sel-btn" data-voicing="octave">Root + Oct</button>';
+    } else {
+      voicingMode = 'full';
+      container.innerHTML =
+        '<button class="sel-btn active" data-voicing="full">Full Chords</button>' +
+        '<button class="sel-btn" data-voicing="power">Power Chords</button>';
+    }
+  }
+
+  // === Finger Detection ===
+  function getFingerStates(landmarks) {
+    const states = [];
+    const ref = landmarks[9];
+    const thumbTip = landmarks[4];
+    const thumbIP = landmarks[3];
+    const tipDist = Math.hypot(thumbTip.x - ref.x, thumbTip.y - ref.y);
+    const ipDist = Math.hypot(thumbIP.x - ref.x, thumbIP.y - ref.y);
+    states.push(tipDist > ipDist * 1.15);
+
+    const tips = [8, 12, 16, 20];
+    const pips = [6, 10, 14, 18];
+    for (let i = 0; i < 4; i++) {
+      states.push(landmarks[tips[i]].y < landmarks[pips[i]].y);
+    }
+    return states;
+  }
+
+  function countFingers(states) { return states.filter(s => s).length; }
+
+  // Get chord from left hand using thumb modifier
+  function getChordFromLeftHand(fingerStates) {
+    const thumbOut = fingerStates[0];
+    const nonThumb = fingerStates.slice(1);
+    const count = nonThumb.filter(s => s).length;
+
+    if (count === 0) return null; // fist = mute
+
+    if (songMode && songChordMap) {
+      // Song mode: direct finger count (1-based) maps to song chords
+      const idx = count - 1;
+      // thumbOut = first bank, thumbIn = second bank (if >4 chords)
+      if (thumbOut) {
+        return idx < songChordMap.length ? songChordMap[idx] : null;
+      } else {
+        const offset = 4;
+        return (offset + idx) < songChordMap.length ? songChordMap[offset + idx] : null;
+      }
+    }
+
+    const keyData = KEY_CHORDS[currentKey];
+    if (!keyData) return null;
+
+    const bank = thumbOut ? keyData.thumbOut : keyData.thumbIn;
+    const idx = count - 1;
+    return idx < bank.length ? bank[idx] : null;
+  }
+
+  // === Strum Detection ===
+  function detectStrum(rightLandmarks, rightFingerStates) {
+    const wristX = rightLandmarks[0].x;
+    const now = performance.now();
+
+    if (prevRightWristX === null || rightHandFrames < 3) {
+      prevRightWristX = wristX;
+      rightHandFrames++;
+      return null;
+    }
+
+    const dx = wristX - prevRightWristX;
+    prevRightWristX = wristX;
+
+    if (Math.abs(dx) > STRUM_THRESHOLD && (now - lastStrumTime) > STRUM_COOLDOWN) {
+      lastStrumTime = now;
+      const velocity = Math.min(1, Math.abs(dx) / 0.12);
+      const fingerCount = countFingers(rightFingerStates);
+      const palmMute = fingerCount <= 1;
+      return { velocity, direction: dx > 0 ? 'down' : 'up', palmMute };
+    }
+
+    return null;
+  }
+
+  // === Whammy Detection ===
+  function getPinchDistance(landmarks) {
+    const dx = landmarks[4].x - landmarks[8].x;
+    const dy = landmarks[4].y - landmarks[8].y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function detectWhammy(rightLandmarks) {
+    const pinchDist = getPinchDistance(rightLandmarks);
+    const isPinched = pinchDist < 0.06;
+    const wristY = rightLandmarks[0].y;
+
+    if (isPinched && !whammyActive) {
+      whammyActive = true;
+      whammyStartY = wristY;
+    } else if (!isPinched && whammyActive) {
+      whammyActive = false;
+      // Spring back handled in whammyLoop
+    }
+
+    if (whammyActive) {
+      const dy = wristY - whammyStartY;
+      whammyTarget = Math.max(0, Math.min(1, dy * 4));
+    } else {
+      whammyTarget = 0;
+    }
+  }
+
+  // Smooth whammy animation at 60fps
+  function whammyLoop() {
+    whammySmooth = lerp(whammySmooth, whammyTarget, whammyActive ? 0.2 : 0.12);
+    if (Math.abs(whammySmooth) < 0.001) whammySmooth = 0;
+
+    if (pitchShift) {
+      pitchShift.pitch = -whammySmooth * 12; // up to 1 octave down
+    }
+
+    // Update display
+    if (whammySmooth > 0.01) {
+      const semitones = (whammySmooth * 12).toFixed(1);
+      whammyValueEl.textContent = '-' + semitones + ' st';
+      whammyMeter.style.width = (whammySmooth * 100) + '%';
+    } else {
+      whammyValueEl.textContent = '\u2014';
+      whammyMeter.style.width = '0%';
+    }
+
+    requestAnimationFrame(whammyLoop);
+  }
+
+  // === Chord Triggering ===
+  function getVoicing(chordName) {
+    if (!chordName) return null;
+    if (currentInstrument === 'bass') {
+      if (voicingMode === 'fifth') return BASS_FIFTH[chordName] || null;
+      if (voicingMode === 'octave') return BASS_OCTAVE[chordName] || null;
+      return BASS_ROOT[chordName] || null;
+    }
+    const v = voicingMode === 'power' ? POWER_VOICINGS : CHORD_VOICINGS;
+    return v[chordName] || null;
+  }
+
+  function muteAll() {
+    if (!instrument) return;
+    for (const note of activeNotes) {
+      try { instrument.triggerRelease(note, Tone.now()); } catch(e) {}
+    }
+    activeNotes = [];
+    playingChord = null;
+  }
+
+  function strumChord(chordName, velocity, direction, palmMute) {
+    if (!instrument || !instrumentLoaded) return;
+    const notes = getVoicing(chordName);
+    if (!notes || notes.length === 0) return;
+
+    muteAll();
+    const ordered = direction === 'up' ? [...notes].reverse() : [...notes];
+    const isBass = currentInstrument === 'bass';
+    const strumGap = palmMute ? 0.005 : (isBass ? 0.008 : 0.015);
+    const vol = velocity * (palmMute ? 0.5 : (isBass ? 1.0 : 0.7));
+    instrument.release = palmMute ? 0.05 : (isBass ? 1.2 : 0.8);
+
+    ordered.forEach((note, i) => {
+      const time = Tone.now() + i * strumGap;
+      if (palmMute) {
+        instrument.triggerAttackRelease(note, 0.1, time, vol);
+      } else {
+        instrument.triggerAttack(note, time, vol);
+        activeNotes.push(note);
+      }
+    });
+
+    playingChord = chordName;
+    showStrumFlash(velocity);
+  }
+
+  function showStrumFlash(intensity) {
+    strumFlash.style.opacity = String(intensity * 0.35);
+    if (strumFlashTimer) clearTimeout(strumFlashTimer);
+    strumFlashTimer = setTimeout(() => { strumFlash.style.opacity = '0'; }, 120);
+  }
+
+  // === Drive ===
+  function applyDrive(preset) {
+    const p = DRIVE_PRESETS[preset];
+    if (!p || !distortionNode) return;
+    distortionNode.distortion = p.distortion;
+    distortionNode.wet.value = p.wet;
+    currentDrive = preset;
+  }
+
+  // === Chord Map ===
+  function updateChordMap() {
+    if (songMode && songChordMap) {
+      updateSongChordMap();
+      return;
+    }
+
+    const keyData = KEY_CHORDS[currentKey];
+    if (!keyData) return;
+
+    const degOut = ['I','IV','V','vi'];
+    const degIn = ['ii','iii','bVII','I7'];
+
+    let html = '<div class="chord-map-cols"><div class="chord-map-col">';
+    html += '<div class="chord-map-col-header">Thumb out</div>';
+    keyData.thumbOut.forEach((ch, i) => {
+      html += `<div class="chord-map-row" data-chord="${ch}">
+        <span class="chord-map-fingers">${i+1}</span>
+        <span class="chord-map-name">${ch} <span style="opacity:0.4;font-size:9px">${degOut[i]}</span></span>
+      </div>`;
+    });
+    html += '</div><div class="chord-map-col">';
+    html += '<div class="chord-map-col-header">Thumb in</div>';
+    keyData.thumbIn.forEach((ch, i) => {
+      html += `<div class="chord-map-row" data-chord="${ch}">
+        <span class="chord-map-fingers">${i+1}</span>
+        <span class="chord-map-name">${ch} <span style="opacity:0.4;font-size:9px">${degIn[i]}</span></span>
+      </div>`;
+    });
+    html += '</div></div>';
+    html += `<div class="chord-map-row" data-chord="mute" style="margin-top:4px">
+      <span class="chord-map-fingers">fist</span>
+      <span class="chord-map-name mute">Mute</span>
+    </div>`;
+
+    chordMapEl.innerHTML = html;
+  }
+
+  function updateSongChordMap() {
+    if (!songChordMap) return;
+    let html = '';
+    songChordMap.forEach((ch, i) => {
+      const label = i < 4 ? `${i+1} (thumb out)` : `${i-3} (thumb in)`;
+      html += `<div class="chord-map-row" data-chord="${ch}">
+        <span class="chord-map-fingers">${label}</span>
+        <span class="chord-map-name">${ch}</span>
+      </div>`;
+    });
+    html += `<div class="chord-map-row" data-chord="mute" style="margin-top:4px">
+      <span class="chord-map-fingers">fist</span>
+      <span class="chord-map-name mute">Mute</span>
+    </div>`;
+    chordMapEl.innerHTML = html;
+  }
+
+  function highlightChordMap(chordName) {
+    chordMapEl.querySelectorAll('.chord-map-row').forEach(row => {
+      row.classList.toggle('active-chord', row.dataset.chord === chordName);
+      row.classList.remove('song-target');
+    });
+  }
+
+  function highlightSongTarget(chordName) {
+    chordMapEl.querySelectorAll('.chord-map-row').forEach(row => {
+      row.classList.toggle('song-target', row.dataset.chord === chordName);
+    });
+  }
+
+  // === Song Mode ===
+  function startSong(songKey) {
+    const song = SONGS[songKey];
+    if (!song) return;
+
+    stopSong();
+    currentSong = song;
+    songMode = true;
+    songBeat = 0;
+    songChordMap = [...song.chords];
+
+    // Need Am for Wish You Were Here
+    if (songKey === 'wish' && !songChordMap.includes('Am')) {
+      songChordMap.push('Am');
+    }
+
+    songTitle.textContent = song.title;
+    songBpmEl.textContent = song.bpm + ' bpm';
+    songBar.classList.add('visible');
+
+    updateChordMap();
+    buildSongProgression();
+
+    // Auto-select appropriate key display
+    document.querySelectorAll('#keySelector .sel-btn').forEach(b => b.classList.remove('active'));
+
+    armedChord = null;
+    muteAll();
+  }
+
+  function buildSongProgression() {
+    if (!currentSong) return;
+    const totalBeats = currentSong.progression.reduce((s, p) => s + p.b, 0);
+
+    songProgression.innerHTML = currentSong.progression.map((p, i) =>
+      `<div class="song-chord-block" data-idx="${i}" style="flex:${p.b}">
+        <div class="beat-fill" style="width:0%"></div>
+        <span style="position:relative;z-index:1">${p.c}</span>
+      </div>`
+    ).join('');
+  }
+
+  function playSong() {
+    if (!currentSong) return;
+    songPlaying = true;
+    songPlayPause.textContent = 'Pause';
+    songPlayPause.classList.add('active');
+
+    Tone.Transport.bpm.value = currentSong.bpm;
+    songScheduleId = Tone.Transport.scheduleRepeat((time) => {
+      Tone.Draw.schedule(() => { advanceSongBeat(); }, time);
+      // Metronome click
+      const beatInMeasure = songBeat % 4;
+      metronome.triggerAttackRelease(beatInMeasure === 0 ? 'G5' : 'C5', '64n', time, beatInMeasure === 0 ? 0.5 : 0.25);
+    }, '4n');
+
+    Tone.Transport.start();
+  }
+
+  function pauseSong() {
+    songPlaying = false;
+    songPlayPause.textContent = 'Play';
+    songPlayPause.classList.remove('active');
+    Tone.Transport.pause();
+  }
+
+  function stopSong() {
+    if (songScheduleId !== null) {
+      Tone.Transport.clear(songScheduleId);
+      songScheduleId = null;
+    }
+    Tone.Transport.stop();
+    songPlaying = false;
+    songMode = false;
+    currentSong = null;
+    songChordMap = null;
+    songBeat = 0;
+    songBar.classList.remove('visible');
+    songPlayPause.textContent = 'Play';
+    songPlayPause.classList.remove('active');
+    document.querySelectorAll('#songSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    updateChordMap();
+  }
+
+  function advanceSongBeat() {
+    if (!currentSong) return;
+    const totalBeats = currentSong.progression.reduce((s, p) => s + p.b, 0);
+    songBeat = (songBeat + 1) % totalBeats;
+    updateSongDisplay();
+  }
+
+  function getCurrentSongEntry() {
+    if (!currentSong) return null;
+    let acc = 0;
+    for (let i = 0; i < currentSong.progression.length; i++) {
+      acc += currentSong.progression[i].b;
+      if (songBeat < acc) {
+        const beatInChord = songBeat - (acc - currentSong.progression[i].b);
+        return { idx: i, chord: currentSong.progression[i].c, beat: beatInChord, total: currentSong.progression[i].b };
+      }
+    }
+    return null;
+  }
+
+  function updateSongDisplay() {
+    const entry = getCurrentSongEntry();
+    if (!entry) return;
+
+    // Update progression blocks
+    songProgression.querySelectorAll('.song-chord-block').forEach((block, i) => {
+      block.classList.remove('current', 'past');
+      const fill = block.querySelector('.beat-fill');
+      if (i < entry.idx) {
+        block.classList.add('past');
+        fill.style.width = '100%';
+      } else if (i === entry.idx) {
+        block.classList.add('current');
+        fill.style.width = ((entry.beat + 1) / entry.total * 100) + '%';
+      } else {
+        fill.style.width = '0%';
+      }
+    });
+
+    // Highlight target chord in chord map
+    highlightSongTarget(entry.chord);
+  }
+
+  // === Particles ===
+  function spawnParticle(x, y, hue) {
+    if (particles.length > MAX_PARTICLES) particles.shift();
+    particles.push({ x, y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2-1, life: 1, size: Math.random()*4+2, hue });
+  }
+
+  // === Drawing ===
+  function drawHand(landmarks, label, w, h) {
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]
+    ];
+    const isRight = label === 'Right';
+    const color = isRight ? 'rgba(0,255,200,' : 'rgba(123,97,255,';
+
+    overlayCtx.lineWidth = 1.5;
+    for (const [a, b] of connections) {
+      overlayCtx.strokeStyle = color + '0.3)';
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
+      overlayCtx.lineTo(landmarks[b].x * w, landmarks[b].y * h);
+      overlayCtx.stroke();
+    }
+
+    for (let i = 0; i < landmarks.length; i++) {
+      const px = landmarks[i].x * w, py = landmarks[i].y * h;
+      const r = (i === 4 || i === 8) ? 5 : 2.5;
+      overlayCtx.fillStyle = color + '0.7)';
+      overlayCtx.beginPath();
+      overlayCtx.arc(px, py, r, 0, Math.PI * 2);
+      overlayCtx.fill();
+      if (i === 8) {
+        const grad = overlayCtx.createRadialGradient(px, py, 0, px, py, 20);
+        grad.addColorStop(0, color + '0.4)');
+        grad.addColorStop(1, color + '0)');
+        overlayCtx.fillStyle = grad;
+        overlayCtx.beginPath();
+        overlayCtx.arc(px, py, 20, 0, Math.PI * 2);
+        overlayCtx.fill();
+        spawnParticle(px, py, isRight ? 165 : 260);
+      }
+    }
+  }
+
+  function drawViz(w, h) {
+    vizCtx.clearRect(0, 0, w, h);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      vizCtx.globalAlpha = p.life * 0.5;
+      vizCtx.fillStyle = `hsla(${p.hue},100%,70%,${p.life})`;
+      vizCtx.beginPath();
+      vizCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      vizCtx.fill();
+    }
+    vizCtx.globalAlpha = 1;
+  }
+
+  // === MediaPipe ===
+  let hands, camera;
+
+  function initMediaPipe() {
+    hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+    });
+    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.6 });
+    hands.onResults(onResults);
+  }
+
+  function onResults(results) {
+    const w = overlayCanvas.width;
+    const h = overlayCanvas.height;
+    overlayCtx.clearRect(0, 0, w, h);
+
+    let rightHand = null, leftHand = null;
+
+    if (results.multiHandLandmarks && results.multiHandedness) {
+      for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+        const landmarks = results.multiHandLandmarks[i];
+        const label = results.multiHandedness[i].label;
+        if (label === 'Left') { rightHand = landmarks; drawHand(landmarks, 'Right', w, h); }
+        else { leftHand = landmarks; drawHand(landmarks, 'Left', w, h); }
+      }
+    }
+
+    // === Left hand: chord selection ===
+    if (leftHand) {
+      const leftFingers = getFingerStates(leftHand);
+      const count = countFingers(leftFingers);
+      fingerValue.textContent = count;
+
+      if (leftFingers.slice(1).every(s => !s)) {
+        // All non-thumb fingers down = fist = mute
+        if (armedChord !== null || activeNotes.length > 0) muteAll();
+        armedChord = null;
+        highlightChordMap('mute');
+      } else {
+        const chord = getChordFromLeftHand(leftFingers);
+        if (chord) {
+          if (chord !== armedChord) console.log('Armed:', chord);
+          armedChord = chord;
+          highlightChordMap(armedChord);
+        }
+      }
+    } else {
+      fingerValue.textContent = '\u2014';
+    }
+
+    // === Right hand: strum + whammy ===
+    if (rightHand) {
+      const rightFingers = getFingerStates(rightHand);
+      rFingerValue.textContent = countFingers(rightFingers);
+
+      // Whammy detection (pinch + pull down)
+      detectWhammy(rightHand);
+
+      // Only detect strum if whammy is not active
+      if (!whammyActive) {
+        const strum = detectStrum(rightHand, rightFingers);
+        if (strum) console.log('Strum!', strum, 'armed:', armedChord);
+        if (strum && armedChord) {
+          strumChord(armedChord, strum.velocity, strum.direction, strum.palmMute);
+          strumValueEl.textContent = (strum.palmMute ? 'PM ' : '') + strum.direction;
+          strumMeter.style.width = (strum.velocity * 100) + '%';
+          if (strumMeterTimer) clearTimeout(strumMeterTimer);
+          strumMeterTimer = setTimeout(() => {
+            strumMeter.style.width = '0%';
+            strumValueEl.textContent = '\u2014';
+          }, 500);
+        }
+      }
+    } else {
+      rFingerValue.textContent = '\u2014';
+      prevRightWristX = null;
+      rightHandFrames = 0;
+      if (whammyActive) { whammyActive = false; whammyTarget = 0; }
+    }
+
+    // === Update chord display ===
+    armedValue.textContent = armedChord || '\u2014';
+    playingValue.textContent = playingChord || '\u2014';
+
+    if (armedChord) {
+      chordDisplay.textContent = armedChord;
+      chordDisplay.classList.add('visible');
+      if (armedChord === playingChord) {
+        chordDisplay.classList.add('playing');
+        chordSub.textContent = 'playing';
+      } else {
+        chordDisplay.classList.remove('playing');
+        chordSub.textContent = 'armed';
+      }
+    } else if (playingChord) {
+      chordDisplay.textContent = playingChord;
+      chordDisplay.classList.add('visible', 'playing');
+      chordSub.textContent = 'ringing';
+    } else {
+      chordDisplay.classList.remove('visible', 'playing');
+      chordSub.textContent = '';
+    }
+
+    drawViz(w, h);
+  }
+
+  // === Resize ===
+  function resize() {
+    const c = document.querySelector('.video-container');
+    overlayCanvas.width = c.clientWidth; overlayCanvas.height = c.clientHeight;
+    vizCanvas.width = c.clientWidth; vizCanvas.height = c.clientHeight;
+  }
+
+  window.addEventListener('resize', resize);
+
+  // === Key selector ===
+  document.getElementById('keySelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.key) return;
+    if (songMode) return; // disabled during song mode
+    document.querySelectorAll('#keySelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentKey = btn.dataset.key;
+    armedChord = null;
+    muteAll();
+    updateChordMap();
+  });
+
+  // === Voicing selector ===
+  document.getElementById('voicingSelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.voicing) return;
+    document.querySelectorAll('#voicingSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    voicingMode = btn.dataset.voicing;
+  });
+
+  // === Instrument selector ===
+  document.getElementById('instrumentSelector').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.inst) return;
+    document.querySelectorAll('#instrumentSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    await switchInstrument(btn.dataset.inst);
+  });
+
+  // === Drive selector ===
+  document.getElementById('driveSelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.drive) return;
+    document.querySelectorAll('#driveSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyDrive(btn.dataset.drive);
+  });
+
+  // === Song selector ===
+  document.getElementById('songSelector').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn || !btn.dataset.song) return;
+    document.querySelectorAll('#songSelector .sel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    startSong(btn.dataset.song);
+  });
+
+  songPlayPause.addEventListener('click', () => {
+    if (!currentSong) return;
+    if (songPlaying) pauseSong();
+    else playSong();
+  });
+
+  songStopBtn.addEventListener('click', stopSong);
+
+  // === Keyboard controls ===
+  document.addEventListener('keydown', (e) => {
+    if (!instrumentLoaded) return;
+
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 8) {
+      // In song mode, 1-N maps to song chords
+      if (songMode && songChordMap) {
+        const idx = num - 1;
+        if (idx < songChordMap.length) {
+          armedChord = songChordMap[idx];
+          highlightChordMap(armedChord);
+          console.log('Armed:', armedChord);
+        }
+      } else {
+        // Free play: 1-4 = thumbOut, 5-8 = thumbIn
+        const keyData = KEY_CHORDS[currentKey];
+        if (num <= 4) {
+          armedChord = keyData.thumbOut[num - 1];
+        } else {
+          armedChord = keyData.thumbIn[num - 5];
+        }
+        highlightChordMap(armedChord);
+        console.log('Armed:', armedChord);
+      }
+    }
+
+    if (e.key === '0') {
+      muteAll(); armedChord = null;
+      highlightChordMap('mute');
+    }
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (armedChord) {
+        strumChord(armedChord, 0.8, 'down', e.shiftKey);
+        console.log('Strum:', armedChord, e.shiftKey ? '(PM)' : '');
+      }
+    }
+
+    // W = whammy (hold)
+    if (e.code === 'KeyW' && !e.repeat) {
+      whammyActive = true;
+      whammyTarget = 0.5;
+    }
+
+    // P = play/pause song
+    if (e.code === 'KeyP' && currentSong) {
+      if (songPlaying) pauseSong(); else playSong();
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyW') {
+      whammyActive = false;
+      whammyTarget = 0;
+    }
+  });
+
+  // === Start ===
+  startBtn.addEventListener('click', async () => {
+    startOverlay.classList.add('hidden');
+    statusBar.classList.add('loading');
+    statusText.textContent = 'initializing...';
+
+    await Tone.start();
+    initAudio();
+    initMediaPipe();
+    resize();
+    updateChordMap();
+    updateVoicingSelector();
+    whammyLoop(); // start whammy animation loop
+
+    if (currentInstrument === 'bass') {
+      await loadBass();
+      if (filter) filter.frequency.value = 1800;
+      if (gainNode) gainNode.gain.value = 9.0;
+    } else {
+      await loadGuitar();
+    }
+
+    try {
+      camera = new Camera(videoEl, {
+        onFrame: async () => { await hands.send({ image: videoEl }); },
+        width: 1280, height: 720
+      });
+      await camera.start();
+      statusDot.classList.add('active');
+      statusBar.classList.remove('loading');
+      statusText.textContent = 'tracking';
+      isPlaying = true;
+    } catch(err) {
+      statusText.textContent = 'camera error';
+      console.error(err);
+    }
+  });
+})();
+</script>
+</body>
+</html>
