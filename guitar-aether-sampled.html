@@ -414,6 +414,10 @@
         <span class="param-label">R Fingers</span>
         <span class="param-value" id="rFingerValue">&mdash;</span>
       </div>
+      <div class="param-row" style="margin-top:8px">
+        <span class="param-label">Octave</span>
+        <span class="param-value" id="octaveValue">&mdash;</span>
+      </div>
     </div>
 
     <div class="panel-section">
@@ -504,6 +508,7 @@
   const whammyMeter = document.getElementById('whammyMeter');
   const fingerValue = document.getElementById('fingerValue');
   const rFingerValue = document.getElementById('rFingerValue');
+  const octaveValueEl = document.getElementById('octaveValue');
   const chordMapEl = document.getElementById('chordMap');
   const strumFlash = document.getElementById('strumFlash');
   const songBar = document.getElementById('songBar');
@@ -657,6 +662,7 @@
   let bassGain = 9.0;
   const GUITAR_MAX_GAIN = 3.0;
   const BASS_MAX_GAIN = 18.0;
+  let octaveOffset = 0;
   let armedChord = null;
   let playingChord = null;
   let activeNotes = [];
@@ -954,6 +960,16 @@
   }
 
   // === Chord Triggering ===
+  function transposeNotes(notes, octaves) {
+    if (octaves === 0) return notes;
+    return notes.map(note => {
+      const match = note.match(/^([A-G][#b]?)(\d)$/);
+      if (!match) return note;
+      const newOct = Math.max(1, Math.min(7, parseInt(match[2]) + octaves));
+      return match[1] + newOct;
+    });
+  }
+
   function getVoicing(chordName) {
     if (!chordName) return null;
     if (currentInstrument === 'bass') {
@@ -980,7 +996,8 @@
     if (!notes || notes.length === 0) return;
 
     muteAll();
-    const ordered = direction === 'up' ? [...notes].reverse() : [...notes];
+    const transposed = transposeNotes(notes, octaveOffset);
+    const ordered = direction === 'up' ? [...transposed].reverse() : [...transposed];
     const isBass = currentInstrument === 'bass';
     const strumGap = palmMute ? 0.005 : (isBass ? 0.008 : 0.015);
     const vol = velocity * (palmMute ? 0.5 : (isBass ? 1.0 : 0.7));
@@ -1297,11 +1314,18 @@
       }
     }
 
-    // === Left hand: chord selection ===
+    // === Left hand: chord selection + height ===
     if (leftHand) {
       const leftFingers = getFingerStates(leftHand);
       const count = countFingers(leftFingers);
       fingerValue.textContent = count;
+
+      // Height → octave offset (hand higher = higher pitch)
+      const handY = leftHand[0].y;
+      const raw = (0.5 - handY) * 4;
+      octaveOffset = Math.max(-2, Math.min(2, Math.round(raw)));
+      const label = octaveOffset > 0 ? '+' + octaveOffset : octaveOffset < 0 ? String(octaveOffset) : '0';
+      octaveValueEl.textContent = label;
 
       if (leftFingers.slice(1).every(s => !s)) {
         // All non-thumb fingers down = fist = mute
@@ -1318,6 +1342,8 @@
       }
     } else {
       fingerValue.textContent = '\u2014';
+      octaveOffset = 0;
+      octaveValueEl.textContent = '\u2014';
     }
 
     // === Right hand: strum + whammy ===
@@ -1355,14 +1381,15 @@
     playingValue.textContent = playingChord || '\u2014';
 
     if (armedChord) {
-      chordDisplay.textContent = armedChord;
+      const octLabel = octaveOffset > 0 ? ' +' + octaveOffset : octaveOffset < 0 ? ' ' + octaveOffset : '';
+      chordDisplay.textContent = armedChord + octLabel;
       chordDisplay.classList.add('visible');
       if (armedChord === playingChord) {
         chordDisplay.classList.add('playing');
         chordSub.textContent = 'playing';
       } else {
         chordDisplay.classList.remove('playing');
-        chordSub.textContent = 'armed';
+        chordSub.textContent = octLabel ? 'armed · oct ' + octLabel.trim() : 'armed';
       }
     } else if (playingChord) {
       chordDisplay.textContent = playingChord;
@@ -1483,6 +1510,18 @@
     if (e.key === '0') {
       muteAll(); armedChord = null;
       highlightChordMap('mute');
+    }
+
+    // Arrow up/down = octave shift
+    if (e.code === 'ArrowUp') {
+      e.preventDefault();
+      octaveOffset = Math.min(2, octaveOffset + 1);
+      octaveValueEl.textContent = octaveOffset > 0 ? '+' + octaveOffset : String(octaveOffset);
+    }
+    if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      octaveOffset = Math.max(-2, octaveOffset - 1);
+      octaveValueEl.textContent = octaveOffset > 0 ? '+' + octaveOffset : String(octaveOffset);
     }
 
     if (e.code === 'Space') {
