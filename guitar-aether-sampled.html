@@ -296,6 +296,30 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
+  .volume-row { display: flex; align-items: center; gap: 10px; }
+
+  .volume-slider {
+    flex: 1; -webkit-appearance: none; appearance: none;
+    height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; outline: none;
+  }
+
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    box-shadow: 0 0 6px rgba(0,255,200,0.3);
+  }
+
+  .volume-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; border: none;
+    background: var(--accent); cursor: pointer;
+  }
+
+  .volume-pct {
+    font-size: 12px; color: var(--accent);
+    font-variant-numeric: tabular-nums; min-width: 36px; text-align: right;
+  }
+
   @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
   .loading .status-dot { animation: pulse 1.5s ease-in-out infinite; }
 </style>
@@ -428,6 +452,14 @@
         <button class="sel-btn inst" data-drive="crunch">Crunch</button>
         <button class="sel-btn inst" data-drive="drive">Drive</button>
         <button class="sel-btn inst" data-drive="heavy">Heavy</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Volume</h3>
+      <div class="volume-row">
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50">
+        <span class="volume-pct" id="volumePct">50%</span>
       </div>
     </div>
 
@@ -621,6 +653,10 @@
   let currentDrive = 'clean';
   let voicingMode = 'full';
   let currentInstrument = 'guitar'; // 'guitar' or 'bass'
+  let guitarGain = 0.6;
+  let bassGain = 9.0;
+  const GUITAR_MAX_GAIN = 3.0;
+  const BASS_MAX_GAIN = 18.0;
   let armedChord = null;
   let playingChord = null;
   let activeNotes = [];
@@ -755,16 +791,27 @@
       if (inst === 'bass') {
         await loadBass();
         if (filter) filter.frequency.value = 1800;
-        if (gainNode) gainNode.gain.value = 9.0;
+        if (gainNode) gainNode.gain.value = bassGain;
       } else {
         await loadGuitar();
         if (filter) filter.frequency.value = 3500;
-        if (gainNode) gainNode.gain.value = 0.6;
+        if (gainNode) gainNode.gain.value = guitarGain;
       }
     }
 
     updateVoicingSelector();
+    updateVolumeSlider();
     updateChordMap();
+  }
+
+  function updateVolumeSlider() {
+    const slider = document.getElementById('volumeSlider');
+    const pctEl = document.getElementById('volumePct');
+    const maxGain = currentInstrument === 'bass' ? BASS_MAX_GAIN : GUITAR_MAX_GAIN;
+    const gain = currentInstrument === 'bass' ? bassGain : guitarGain;
+    const pct = Math.round((gain / maxGain) * 100);
+    slider.value = pct;
+    pctEl.textContent = pct + '%';
   }
 
   function updateVoicingSelector() {
@@ -1360,6 +1407,17 @@
     voicingMode = btn.dataset.voicing;
   });
 
+  // === Volume slider ===
+  document.getElementById('volumeSlider').addEventListener('input', (e) => {
+    const pct = parseInt(e.target.value);
+    document.getElementById('volumePct').textContent = pct + '%';
+    const maxGain = currentInstrument === 'bass' ? BASS_MAX_GAIN : GUITAR_MAX_GAIN;
+    const gain = (pct / 100) * maxGain;
+    if (currentInstrument === 'bass') bassGain = gain;
+    else guitarGain = gain;
+    if (gainNode) gainNode.gain.value = gain;
+  });
+
   // === Instrument selector ===
   document.getElementById('instrumentSelector').addEventListener('click', async (e) => {
     const btn = e.target.closest('.sel-btn');
@@ -1471,10 +1529,12 @@
     if (currentInstrument === 'bass') {
       await loadBass();
       if (filter) filter.frequency.value = 1800;
-      if (gainNode) gainNode.gain.value = 9.0;
+      if (gainNode) gainNode.gain.value = bassGain;
     } else {
       await loadGuitar();
+      if (gainNode) gainNode.gain.value = guitarGain;
     }
+    updateVolumeSlider();
 
     try {
       camera = new Camera(videoEl, {
